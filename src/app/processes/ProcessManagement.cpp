@@ -1,49 +1,64 @@
-#include <iostream>
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+
 #include "ProcessManagement.hpp"
-#include <unistd.h>
-#include <cstring>
+#include <iostream>
+#include <string>
+#include "../encryptDecrypt/Cryption.hpp"
 #ifdef _WIN32
 #include <windows.h>
 #else
-#include <sys/wait.h>
+#include <sys/wait.h>   
 #endif
-#include "../encryptDecrypt/Cryption.hpp"
+using namespace std;
+ProcessManagement::ProcessManagement(){}
 
-ProcessManagement::ProcessManagement() {}
-
-bool ProcessManagement::submitToQueue(std::unique_ptr<Task> task) {
-    taskQueue.push(std::move(task));
+bool ProcessManagement::submitToQueue(std::unique_ptr<Task> task){
+    taskQueue.push(move(task));
+    #ifdef _WIN32
+        STARTUPINFO si = { sizeof(STARTUPINFO) };
+        PROCESS_INFORMATION pi;
+        ZeroMemory(&si, sizeof(si));
+        ZeroMemory(&pi, sizeof(pi));
+    
+        if (CreateProcess(NULL,   // No module name (use command line)
+                          L"child_process", // Command line
+                          NULL,   // Process handle not inheritable
+                          NULL,   // Thread handle not inheritable
+                          FALSE,  // Set handle inheritance to FALSE
+                          0,      // No creation flags
+                          NULL,   // Use parent's environment block
+                          NULL,   // Use parent's starting directory 
+                          &si,    // Pointer to STARTUPINFO structure
+                          &pi)    // Pointer to PROCESS_INFORMATION structure
+        ) {
+            cout << "Enter the child process " << endl;
+            executeTasks();
+            cout << "Exiting child process " << endl;
+            CloseHandle(pi.hProcess);
+            CloseHandle(pi.hThread);
+        } else {
+            cout << "Failed to create child process" << endl;
+        }
+    #else
+        int pid = fork(); 
+        if(pid < 0){
+            cout << "Enter the parent process " << endl;
+        }
+        else{
+            cout << "Enter the child process " << endl;
+            executeTasks();
+            cout << "Exiting child process " << endl;
+        }
+    #endif
     return true;
 }
 
-void ProcessManagement::executeTasks() {
-    while (!taskQueue.empty()) {
-        std::unique_ptr<Task> taskToExecute = std::move(taskQueue.front());
+void ProcessManagement::executeTasks(){
+    while(!taskQueue.empty()){
+        unique_ptr<Task> tasktoExecute = move(taskQueue.front()); 
         taskQueue.pop();
-        std::cout << "Executing task: " << taskToExecute->toString() << std::endl;
-        // Add a breakpoint here in VS Code
-        executeCryption(taskToExecute->toString());
-        // int childProcessToRun = fork();
-        // if (childProcessToRun == 0) {
-        //     // Child process
-        //     std::string taskStr = taskToExecute->toString();
-        //     char* args[3];
-        //     args[0] = strdup("./cryption");  // Use the correct path to your cryption executable
-        //     args[1] = strdup(taskStr.c_str());
-        //     args[2] = nullptr;
-        //     execv("./cryption", args);  // Use the correct path to your cryption executable
-        //     // If execv returns, there was an error
-        //     std::cerr << "Error executing cryption" << std::endl;
-        //     exit(1);
-        // } else if (childProcessToRun > 0) {
-        //     // Parent process
-        //     // Wait for the child process to complete
-        //     int status;
-        //     waitpid(childProcessToRun, &status, 0);
-        // } else {
-        //     // Fork failed
-        //     std::cerr << "Fork failed" << std::endl;
-        //     exit(1);
-        // }
+        cout<<"Executing task: " << tasktoExecute->toString() <<endl;
+        executeCryption(tasktoExecute->toString());
     }
 }
